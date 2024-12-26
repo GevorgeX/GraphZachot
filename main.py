@@ -2,6 +2,7 @@ import enum
 import json
 import networkx as nx
 import matplotlib.pyplot as plt
+from collections import deque
 
 class COLOR(enum.Enum):
     RED = 1
@@ -80,29 +81,52 @@ def draw_bitpart(vertices, edges, colors):
             node_size = 1000)
     plt.savefig(output_name)
 
-def find_circle(grap , vert1 ,vert2):
-    def dfs(node, target, visited, path):
-        visited.add(node)
-        path.append(node)
-        for neighbor in grap[node]:
-            if neighbor == target and len(path) > 2:
-                path.append(neighbor)
-                return True
-            if neighbor not in visited:
-                if dfs(neighbor, target, visited, path):
-                    return True
+def find_circle(graph_dict):
+    color = {}  # Хранит цвет вершины: 0 или 1
+    parent = {}  # Хранит предков для восстановления пути
 
-        path.pop()
-        return False
+    for start in graph_dict:  # Проверяем каждую компоненту связности
+        if start not in color:
+            queue = deque([start])
+            color[start] = 0  # Начинаем с цвета 0
+            parent[start] = None  # У корневой вершины нет предка
 
-    # Find a cycle starting from v1 that contains v2
-    for start in [vert1, vert2]:
-        visited = set()
-        path = []
-        if dfs(start, start, visited, path) and vert1 in path and vert2 in path:
-            return path[1:]
+            while queue:
+                current = queue.popleft()
 
-    return None
+                for neighbor in graph_dict[current]:
+                    if neighbor not in color:  # Если вершина ещё не окрашена
+                        color[neighbor] = 1 - color[current]  # Красим в другой цвет
+                        parent[neighbor] = current
+                        queue.append(neighbor)
+                    elif color[neighbor] == color[current]:  # Найден нечётный цикл
+                        # Восстановим цикл
+                        cycle = []
+                        u, v = current, neighbor
+
+                        # Идём назад от `u` и `v` до их общего предка
+                        path_u, path_v = [], []
+                        while u is not None:
+                            path_u.append(u)
+                            u = parent[u]
+                        while v is not None:
+                            path_v.append(v)
+                            v = parent[v]
+
+                        # Найдём их общий предок
+                        path_u.reverse()
+                        path_v.reverse()
+                        i = 0
+                        while i < len(path_u) and i < len(path_v) and path_u[i] == path_v[i]:
+                            i += 1
+
+                        # Формируем нечётный цикл
+                        cycle.extend(path_u[i-1:][::-1])  # Часть пути u
+                        cycle.extend(path_v[i:])  # Часть пути v
+                        cycle.append(current)  # Добавляем текущее ребро
+                        return cycle
+    return None  # Нечётный цикл не найден
+
 
 def draw_graph_with_circle(vertices, edges, circle):
     G = nx.Graph()
@@ -138,5 +162,5 @@ if __name__ == "__main__":
         draw_bitpart(vertices, edges, res)
     else:
         print(f"No your graph is not bitpart")
-        circle = find_circle(graph.adjacency_list , res[0] ,res[1])
+        circle = find_circle(graph.adjacency_list)
         draw_graph_with_circle(vertices, edges, circle)
